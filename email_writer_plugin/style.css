@@ -1,0 +1,181 @@
+/* Rewrite Pen */
+#rewrite-pen {
+  position: absolute;
+  display: none;
+  cursor: pointer;
+  background: black;
+  color: white;
+  border: 1px solid #fff;
+  padding: 3px 3px;
+  border-radius: 10px;
+  font-size: 15px;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+#rewrite-pen:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 10px 4px rgba(255, 255, 255, 0.1);
+}
+
+/* Dropdowns */
+.ai-tone-dropdown,
+.ai-length-dropdown {
+  margin: 0 8px;
+  padding: 6px 10px;
+  border: 1px solid #000;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* AI Buttons */
+.ai-write-button,
+.ai-reply-button,
+.ai-subject-button {
+  color: #fff;
+  border: 1px solid #fff;
+  border-radius: 12px;
+  font-size: 14px;
+  margin-right: 8px;
+  transition: 0.3s;
+  background-color: #800020;
+}
+
+.ai-subject-button {
+  background-color: rgba(15, 136, 138, 0.75);
+}
+
+.ai-write-button:hover,
+.ai-reply-button:hover,
+.ai-subject-button:hover {
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+}
+
+/* Toolbar Container */
+.ai-toolbar-container {
+  display: flex;
+  align-items: center;
+}
+
+/* Glow animation for generating */
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 1);
+  }
+}
+
+.ai-glow-button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ai-glow-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8), 0 0 8px currentColor;
+}
+
+/* Error Modal Overlay */
+#ai-error-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  font-family: 'Inter', sans-serif;
+  opacity: 0;
+  animation: fadeIn 0.3s forwards;
+}
+
+/* Error Modal Content */
+#ai-error-modal-content {
+  background-color: #ffffff; /* Reverted to white background */
+  padding: 20px 35px; /* Adjusted padding for compactness */
+  border-radius: 12px; /* Rounded corners */
+  text-align: center; /* Centered text */
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4); /* Stronger shadow */
+  max-width: 450px; /* Wider look */
+  transform: translateY(-20px);
+  animation: slideIn 0.4s forwards;
+  display: flex;
+  flex-direction: column; /* Column layout for title, message, button */
+  align-items: center;
+  gap: 10px; /* Spacing between elements */
+  border-left: none; /* Removed left border */
+}
+
+/* Modal Title */
+#ai-error-modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 10px; /* Space between title and message */
+  color: #d9534f; /* Error red color */
+  font-size: 22px;
+  font-weight: 700;
+  display: block; /* Ensure title is visible */
+}
+
+/* Modal Message Paragraph */
+#ai-error-modal-content p {
+  color: #333; /* Standard text color */
+  font-size: 16px; /* All text same size as button text */
+  font-weight: 600; /* Bolder text */
+  line-height: 1.5;
+  margin: 0; /* Removed margins */
+  margin-bottom: 15px; /* Space before button */
+  flex-grow: 0; /* No flex-grow */
+}
+
+/* OK Button */
+#ai-error-modal-ok-btn {
+  background-color: #3498db; /* Blue background */
+  color: white;
+  border: none;
+  border-radius: 8px; /* Rounded corners */
+  padding: 8px 20px; /* Smaller button padding */
+  font-size: 16px; /* Same size as message text */
+  cursor: pointer;
+  margin-top: 10px; /* Space above button */
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  align-self: auto; /* Revert align-self */
+  line-height: normal; /* Revert line-height */
+}
+
+#ai-error-modal-ok-btn:hover {
+  background-color: #2980b9; /* Darker blue on hover */
+  transform: translateY(-2px); /* Slight lift on hover */
+}
+
+/* Removed flame icon */
+#ai-error-modal-content::before {
+  content: none;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
