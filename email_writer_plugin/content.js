@@ -5,8 +5,6 @@ let savedRange = null;
 
 async function showLoginModal() {
   return new Promise(async (resolve) => {
-    // First, try to get a token silently by sending a message to background.js
-    // The background script will handle the chrome.identity.getAuthToken({ interactive: false })
     try {
       const silentResponse = await chrome.runtime.sendMessage({
         type: 'CHECK_LOGIN_STATUS',
@@ -17,22 +15,20 @@ async function showLoginModal() {
         await chrome.storage.local.set({
           googleAccessToken: silentResponse.token,
         });
-        resolve(); // User is already logged in, no modal needed, resolve
+        resolve();
         return;
       }
     } catch (e) {
       console.warn('Silent login check failed or no token:', e);
-      // Continue to show the modal if silent check fails or no token
     }
 
-    // If no token (or silent check failed), show the login modal
-    document.getElementById('ai-login-modal-overlay')?.remove(); // Remove any existing login modal
+    document.getElementById('ai-login-modal-overlay')?.remove();
 
     const overlay = document.createElement('div');
-    overlay.id = 'ai-login-modal-overlay'; // NEW ID
+    overlay.id = 'ai-login-modal-overlay';
 
     const content = document.createElement('div');
-    content.id = 'ai-login-modal-content'; // NEW ID
+    content.id = 'ai-login-modal-content';
 
     const title = document.createElement('h3');
     title.textContent = 'Login Required';
@@ -51,7 +47,6 @@ async function showLoginModal() {
       loginButton.style.animation = 'glow 1s infinite alternate';
 
       try {
-        // Send message to background script to initiate interactive OAuth flow
         const response = await chrome.runtime.sendMessage({
           type: 'LOGIN_WITH_GOOGLE',
         });
@@ -92,10 +87,8 @@ async function showLoginModal() {
 }
 
 function showErrorModal(message, wrapper, originalText) {
-  // Remove any existing modal first
   document.getElementById('ai-error-modal-overlay')?.remove();
 
-  // Create modal elements
   const overlay = document.createElement('div');
   overlay.id = 'ai-error-modal-overlay';
 
@@ -112,26 +105,22 @@ function showErrorModal(message, wrapper, originalText) {
   okButton.id = 'ai-error-modal-ok-btn';
   okButton.textContent = 'OK';
 
-  // Event listener for the OK button
   okButton.addEventListener('click', () => {
-    // 1. Revert the UI to its original state
     if (wrapper && wrapper.parentNode) {
       wrapper.parentNode.replaceChild(
         document.createTextNode(originalText || ''),
         wrapper
       );
     }
-    // 2. Close the modal
+
     overlay.remove();
   });
 
-  // Assemble the modal
   content.appendChild(title);
   content.appendChild(messagePara);
   content.appendChild(okButton);
   overlay.appendChild(content);
 
-  // Add the modal to the page
   document.body.appendChild(overlay);
 }
 
@@ -142,14 +131,6 @@ async function typeChunkText(target, text, delay = 2) {
   }
 }
 
-/**
- * Streams Server-Sent Events (SSE) and injects the content into the page.
- * @param {string} url - The URL for the SSE endpoint.
- * @param {object} payload - The payload to send with the request.
- * @param {number} flag - A flag to determine injection method (0 for compose box, 1 for selected range).
- * @param {string} originalText - The original text, used for reverting changes.
- * @param {object} headers - The headers object to include in the fetch request.
- */
 async function streamSSEWithInjection(
   url,
   payload,
@@ -182,7 +163,7 @@ async function streamSSEWithInjection(
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: headers, // Use the passed headers here
+      headers: headers,
       body: JSON.stringify(payload),
     });
 
@@ -230,7 +211,7 @@ async function streamSSEWithInjection(
     if (bufferedText.trim()) {
       await typeChunkText(rewrittenSpan, bufferedText);
     }
-    // ✅ Stream done — now inject buttons
+
     const buttonContainer = document.createElement('span');
     buttonContainer.setAttribute(
       'style',
@@ -411,11 +392,11 @@ const createButton = (className, text, tooltip) => {
     className.includes('ai-write-button') ||
     className.includes('ai-reply-button')
   ) {
-    button.style.backgroundColor = '#800020'; // deep red
+    button.style.backgroundColor = '#800020';
     button.style.color = '#ffffff';
     button.style.border = '1px solid #ffffff';
   } else if (className.includes('ai-subject-button')) {
-    button.style.backgroundColor = 'rgba(15, 136, 138, 0.85)'; // cyan/blue
+    button.style.backgroundColor = 'rgba(15, 136, 138, 0.85)';
     button.style.color = '#ffffff';
     button.style.border = '1px solid #ffffff';
   }
@@ -426,13 +407,12 @@ const createButton = (className, text, tooltip) => {
 const injectButton = async (val) => {
   await showLoginModal();
 
-  // After showLoginModal resolves, re-check for token before proceeding
   const result = await chrome.storage.local.get('googleAccessToken');
   const accessToken = result.googleAccessToken;
 
   if (!accessToken) {
     console.log('User is not logged in after modal, not injecting buttons.');
-    return; // Stop execution if no access token
+    return;
   }
   const toolbar = findComposeToolbar();
   if (!toolbar) return console.log('No toolbar found');
@@ -467,7 +447,7 @@ const injectButton = async (val) => {
   lengthDropdown.style.marginRight = '5px';
 
   if (subjectButton) {
-    subjectButton.style.marginRight = '5px'; // Push subject button away from send
+    subjectButton.style.marginRight = '5px';
   }
   const composeBox = document.querySelector(
     '[role="textbox"][g_editable="true"]'
@@ -511,14 +491,6 @@ const injectButton = async (val) => {
   }
 };
 
-/**
- * Handles the click event for AI buttons, making a request to the backend.
- * @param {HTMLElement} button - The button element that was clicked.
- * @param {string} endpoint - The API endpoint to call (e.g., '/api/email/write').
- * @param {string} tone - The selected tone for the AI response.
- * @param {string} length - The selected length for the AI response.
- * @param {HTMLElement | null} composeBox - The email compose box element.
- */
 const handleButtonClick = async (
   button,
   endpoint,
@@ -531,7 +503,6 @@ const handleButtonClick = async (
     button.disabled = true;
     button.style.animation = 'glow 1s infinite alternate';
 
-    // 1. Retrieve the stored Google Access Token
     const result = await chrome.storage.local.get('googleAccessToken');
     const googleAccessToken = result.googleAccessToken;
 
@@ -539,10 +510,9 @@ const handleButtonClick = async (
       throw new Error('User not authenticated. Please log in.');
     }
 
-    // 2. Define common headers including the Authorization header
     const commonHeaders = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${googleAccessToken}`, // Send the access token as a Bearer token
+      Authorization: `Bearer ${googleAccessToken}`,
     };
 
     if (endpoint !== '/api/email/subject') {
@@ -558,12 +528,12 @@ const handleButtonClick = async (
           'The user input is too large,Please try again with a smaller input'
         );
       }
-      // Pass the commonHeaders to streamSSEWithInjection
+
       await streamSSEWithInjection(url, payload, 0, '', commonHeaders);
     } else {
       const response = await fetch(`http://localhost:8080${endpoint}`, {
         method: 'POST',
-        headers: commonHeaders, // Use the commonHeaders here
+        headers: commonHeaders,
         body: JSON.stringify({
           emailContent: getEmailContent(),
           tone: tone || 'professional',
@@ -573,7 +543,6 @@ const handleButtonClick = async (
       });
 
       if (!response.ok) {
-        // Assuming your backend sends JSON errors
         const errorData = await response.json();
         throw new Error(
           errorData.error || `API Request Failed with status ${response.status}`

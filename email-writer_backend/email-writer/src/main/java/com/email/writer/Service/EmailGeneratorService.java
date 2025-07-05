@@ -4,7 +4,7 @@ import com.email.writer.ExceptionHandling.GeminiQuotaExceededException;
 import com.email.writer.ExceptionHandling.GeminiTimeoutException;
 import com.email.writer.ExceptionHandling.PromptTooLargeException;
 import com.email.writer.Models.EmailRequest;
-import com.email.writer.Models.GoogleTokenInfo; // Import the new model
+import com.email.writer.Models.GoogleTokenInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,14 +28,14 @@ public class EmailGeneratorService {
 
 
     private final WebClient webClient;
-    private final ObjectMapper objectMapper; // Added ObjectMapper for JSON parsing
+    private final ObjectMapper objectMapper;
 
     @Value("${gemini.api.url}")
     private String geminiAPiUrl;
     @Value("${gemini.api.key}")
     private String geminiApiKey;
 
-    @Value("${google.oauth2.client-id}") // New property for your Google OAuth2 Client ID
+    @Value("${google.oauth2.client-id}")
     private String googleOAuth2ClientId;
 
     @Value("${limit}")
@@ -43,15 +43,10 @@ public class EmailGeneratorService {
 
     public EmailGeneratorService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
         this.webClient = webClientBuilder.build();
-        this.objectMapper = objectMapper; // Initialize ObjectMapper
+        this.objectMapper = objectMapper;
     }
 
-    /**
-     * Verifies the Google OAuth2 access token and extracts the user's email.
-     * @param authorizationHeader The full Authorization header string (e.g., "Bearer YOUR_TOKEN").
-     * @return The user's email address.
-     * @throws SecurityException if the token is invalid, expired, or verification fails.
-     */
+
     private String verifyGoogleAccessTokenAndGetEmail(String authorizationHeader) {
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
             throw new SecurityException("Missing or invalid Authorization header.");
@@ -59,7 +54,7 @@ public class EmailGeneratorService {
         String accessToken = authorizationHeader.substring("Bearer ".length());
 
         try {
-            // Call Google's tokeninfo endpoint to verify the access token
+
             GoogleTokenInfo tokenInfo = webClient.get()
                     .uri("https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=" + accessToken)
                     .retrieve()
@@ -68,23 +63,22 @@ public class EmailGeneratorService {
                     .onStatus(status -> status.is5xxServerError(), // Corrected line
                             response -> Mono.error(new RuntimeException("Google TokenInfo service error.")))
                     .bodyToMono(GoogleTokenInfo.class)
-                    .block(); // Blocking call, consider making this reactive if your service becomes fully reactive
+                    .block();
 
-            // Basic validation of the token info
+
             if (tokenInfo == null || tokenInfo.getEmail() == null || tokenInfo.getEmail().isEmpty() ||
                     !Objects.equals(tokenInfo.getAud(), googleOAuth2ClientId) ||
                     !"true".equals(tokenInfo.getEmailVerified())) {
                 throw new SecurityException("Google Access Token validation failed.");
             }
 
-            // You can also check tokenInfo.getExp() for expiration if needed,
-            // but Google's endpoint usually handles expired tokens by returning 4xx.
+
 
             System.out.println("User email from Google: " + tokenInfo.getEmail());
             return tokenInfo.getEmail();
 
         } catch (SecurityException e) {
-            throw e; // Re-throw security exceptions
+            throw e;
         } catch (Exception e) {
             System.err.println("Error verifying Google token: " + e.getMessage());
             throw new RuntimeException("Failed to verify Google token.", e);
@@ -118,7 +112,7 @@ public class EmailGeneratorService {
 
     private String extractResponseContent(String response) {
         try {
-            JsonNode rootNode = objectMapper.readTree(response); // Use injected ObjectMapper
+            JsonNode rootNode = objectMapper.readTree(response);
             return rootNode.path("candidates")
                     .get(0)
                     .path("content")
@@ -133,7 +127,7 @@ public class EmailGeneratorService {
 
     public String generateSubject(String authorizationHeader, EmailRequest emailRequest) {
         String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
-        emailRequest.setUserEmail(userEmail); // Set the user email in the request object
+        emailRequest.setUserEmail(userEmail);
 
         // global limits
         if (!rateLimiter.isAllowed("global", 15, 200)) {
@@ -141,7 +135,7 @@ public class EmailGeneratorService {
         }
 
         if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
-            throw new GeminiQuotaExceededException("Gemini quota exceeded");
+            throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
 
 
@@ -188,7 +182,7 @@ public class EmailGeneratorService {
         }
 
         if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
-            throw new GeminiQuotaExceededException("Gemini quota exceeded");
+            throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
 
         String prompt = buildPrompt(emailRequest, 1);
@@ -204,12 +198,12 @@ public class EmailGeneratorService {
 
         // global limits
         if (!rateLimiter.isAllowed("global", 15, 200)) {
-            throw new GeminiQuotaExceededException("API usage limit reached. Please wait.");
+            throw new GeminiQuotaExceededException("API usage limit reached. Please try again later.");
         }
 
 
         if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
-            throw new GeminiQuotaExceededException("Gemini quota exceeded");
+            throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
 
         String prompt = buildPrompt(emailRequest, 0);
@@ -219,29 +213,29 @@ public class EmailGeneratorService {
         return streamPromptToGemini(prompt);
     }
 
-    // In EmailGeneratorService.java
+
     private int calculateWordCount(String text) {
         if (text == null || text.trim().isEmpty()) {
             return 0;
         }
-        // This regex handles multiple spaces between words gracefully.
+
         String[] words = text.trim().split("\\s+");
         return words.length;
     }
 
     public Flux<String> generateContent(String authorizationHeader, EmailRequest emailRequest) {
         String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
-        emailRequest.setUserEmail(userEmail); // Set the user email in the request object
+        emailRequest.setUserEmail(userEmail);
 
         // global limits
         if (!rateLimiter.isAllowed("global", 15, 200)) {
-            throw new GeminiQuotaExceededException("API usage limit reached. Please wait.");
+            throw new GeminiQuotaExceededException("API usage limit reached. Please try again later.");
         }
 
 
-        
+
         if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
-            throw new GeminiQuotaExceededException("Gemini quota exceeded");
+            throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
 
         StringBuilder prompt = new StringBuilder();

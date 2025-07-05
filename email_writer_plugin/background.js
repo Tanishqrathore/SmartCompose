@@ -12,9 +12,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, token });
       }
     });
-    return true; // keeps response channel open
+    return true;
   } else if (request.type === 'CHECK_LOGIN_STATUS') {
-    // Handle silent token check
     chrome.identity.getAuthToken({ interactive: false }, function (token) {
       if (chrome.runtime.lastError) {
         console.warn('Silent auth check error:', chrome.runtime.lastError);
@@ -30,6 +29,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: 'No token' });
       }
     });
-    return true; // keeps response channel open
+    return true;
   }
 });
