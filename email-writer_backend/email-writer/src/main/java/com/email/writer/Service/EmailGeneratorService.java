@@ -129,10 +129,7 @@ public class EmailGeneratorService {
         String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
         emailRequest.setUserEmail(userEmail);
 
-        // global limits
-        if (!rateLimiter.isAllowed("global", 15, 200)) {
-            throw new GeminiQuotaExceededException("API usage limit reached. Please wait.");
-        }
+
 
         if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
@@ -176,10 +173,7 @@ public class EmailGeneratorService {
         String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
         emailRequest.setUserEmail(userEmail); // Set the user email in the request object
 
-        // global limits
-        if (!rateLimiter.isAllowed("global", 15, 200)) {
-            throw new GeminiQuotaExceededException("API usage limit reached. Please wait.");
-        }
+
 
         if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
@@ -196,12 +190,9 @@ public class EmailGeneratorService {
         String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
         emailRequest.setUserEmail(userEmail); // Set the user email in the request object
 
-        // global limits
-        if (!rateLimiter.isAllowed("global", 15, 200)) {
-            throw new GeminiQuotaExceededException("API usage limit reached. Please try again later.");
-        }
 
 
+        //per user limit
         if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
@@ -227,10 +218,7 @@ public class EmailGeneratorService {
         String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
         emailRequest.setUserEmail(userEmail);
 
-        // global limits
-        if (!rateLimiter.isAllowed("global", 15, 200)) {
-            throw new GeminiQuotaExceededException("API usage limit reached. Please try again later.");
-        }
+
 
 
 

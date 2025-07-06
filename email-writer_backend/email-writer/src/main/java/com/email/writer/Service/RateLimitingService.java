@@ -23,17 +23,27 @@ public class RateLimitingService {
         this.rateLimitScript.setResultType(Long.class);
     }
 
-    public boolean isAllowed(String userId, int perMinute, int perDay) {
+    public boolean isAllowed(String userId, int userPerMinute, int userPerDay) {
+        String prefix = "rate_limit:";
+        String userPrefix = prefix + userId;
+        String globalPrefix = prefix + "global";
+
         List<String> keys = List.of(
-                "rate_limit:" + userId + ":minute_count",
-                "rate_limit:" + userId + ":day_count",
-                "rate_limit:" + userId + ":minute_ts",
-                "rate_limit:" + userId + ":day_ts"
+                userPrefix + ":minute_count",
+                userPrefix + ":day_count",
+                userPrefix + ":minute_ts",
+                userPrefix + ":day_ts",
+                globalPrefix + ":minute_count",
+                globalPrefix + ":day_count",
+                globalPrefix + ":minute_ts",
+                globalPrefix + ":day_ts"
         );
 
         List<String> args = List.of(
-                String.valueOf(perMinute),
-                String.valueOf(perDay),
+                String.valueOf(userPerMinute),
+                String.valueOf(userPerDay),
+                String.valueOf(15),
+                String.valueOf(200),
                 String.valueOf(Instant.now().getEpochSecond())
         );
 
@@ -45,4 +55,5 @@ public class RateLimitingService {
 
         return result != null && result == 1L;
     }
+
 }
