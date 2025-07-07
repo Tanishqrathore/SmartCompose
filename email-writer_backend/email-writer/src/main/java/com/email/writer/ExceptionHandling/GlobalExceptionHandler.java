@@ -27,6 +27,11 @@ public class GlobalExceptionHandler {
         return buildResponse(ex.getMessage(), "GEMINI_QUOTA_EXCEEDED", HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    @ExceptionHandler(SessionInvalidException.class)
+    public ResponseEntity<?> handleInvalidSession(SessionInvalidException ex) {
+        return buildResponse(ex.getMessage(), "SESSION_INVALID", HttpStatus.UNAUTHORIZED);
+    }
+
     //catches everyother exception now.
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleAll(Exception ex) {

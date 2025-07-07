@@ -3,13 +3,12 @@ package com.email.writer.Service;
 import com.email.writer.ExceptionHandling.GeminiQuotaExceededException;
 import com.email.writer.ExceptionHandling.GeminiTimeoutException;
 import com.email.writer.ExceptionHandling.PromptTooLargeException;
+import com.email.writer.ExceptionHandling.SessionInvalidException;
 import com.email.writer.Models.EmailRequest;
-import com.email.writer.Models.GoogleTokenInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -17,7 +16,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.Objects;
 
 @Service
 public class EmailGeneratorService {
@@ -29,61 +27,25 @@ public class EmailGeneratorService {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final SessionService sessionService;
+
 
     @Value("${gemini.api.url}")
     private String geminiAPiUrl;
     @Value("${gemini.api.key}")
     private String geminiApiKey;
 
-    @Value("${google.oauth2.client-id}")
-    private String googleOAuth2ClientId;
 
     @Value("${limit}")
     private Integer promptLimit;
 
-    public EmailGeneratorService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
+    public EmailGeneratorService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper,SessionService sessionService) {
         this.webClient = webClientBuilder.build();
         this.objectMapper = objectMapper;
+        this.sessionService=sessionService;
     }
 
 
-    private String verifyGoogleAccessTokenAndGetEmail(String authorizationHeader) {
-        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            throw new SecurityException("Missing or invalid Authorization header.");
-        }
-        String accessToken = authorizationHeader.substring("Bearer ".length());
-
-        try {
-
-            GoogleTokenInfo tokenInfo = webClient.get()
-                    .uri("https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=" + accessToken)
-                    .retrieve()
-                    .onStatus(status -> status.is4xxClientError(), // Corrected line
-                            response -> Mono.error(new SecurityException("Invalid Google Access Token.")))
-                    .onStatus(status -> status.is5xxServerError(), // Corrected line
-                            response -> Mono.error(new RuntimeException("Google TokenInfo service error.")))
-                    .bodyToMono(GoogleTokenInfo.class)
-                    .block();
-
-
-            if (tokenInfo == null || tokenInfo.getEmail() == null || tokenInfo.getEmail().isEmpty() ||
-                    !Objects.equals(tokenInfo.getAud(), googleOAuth2ClientId) ||
-                    !"true".equals(tokenInfo.getEmailVerified())) {
-                throw new SecurityException("Google Access Token validation failed.");
-            }
-
-
-
-            System.out.println("User email from Google: " + tokenInfo.getEmail());
-            return tokenInfo.getEmail();
-
-        } catch (SecurityException e) {
-            throw e;
-        } catch (Exception e) {
-            System.err.println("Error verifying Google token: " + e.getMessage());
-            throw new RuntimeException("Failed to verify Google token.", e);
-        }
-    }
 
     // non streaming prompt for subject line.
     private String sendPromptToGemini(String prompt) {
@@ -125,9 +87,9 @@ public class EmailGeneratorService {
         }
     }
 
-    public String generateSubject(String authorizationHeader, EmailRequest emailRequest) {
-        String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
-        emailRequest.setUserEmail(userEmail);
+    public String generateSubject(String passcode,EmailRequest emailRequest) {
+        String userEmail = sessionService.getEmail(passcode);
+        if(userEmail==null){throw new SessionInvalidException("Please login");}
 
 
 
@@ -169,11 +131,9 @@ public class EmailGeneratorService {
                 );
     }
 
-    public Flux<String> generateEmail(String authorizationHeader, EmailRequest emailRequest) {
-        String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
-        emailRequest.setUserEmail(userEmail); // Set the user email in the request object
-
-
+    public Flux<String> generateEmail(String passcode,EmailRequest emailRequest) {
+        String userEmail = sessionService.getEmail(passcode);
+        if(userEmail==null){throw new SessionInvalidException("Please login");}
 
         if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
@@ -186,9 +146,9 @@ public class EmailGeneratorService {
         return streamPromptToGemini(prompt);
     }
 
-    public Flux<String> generateEmailReply(String authorizationHeader, EmailRequest emailRequest) {
-        String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
-        emailRequest.setUserEmail(userEmail); // Set the user email in the request object
+    public Flux<String> generateEmailReply(String passcode,EmailRequest emailRequest) {
+        String userEmail = sessionService.getEmail(passcode);
+
 
 
 
@@ -214,11 +174,9 @@ public class EmailGeneratorService {
         return words.length;
     }
 
-    public Flux<String> generateContent(String authorizationHeader, EmailRequest emailRequest) {
-        String userEmail = verifyGoogleAccessTokenAndGetEmail(authorizationHeader);
-        emailRequest.setUserEmail(userEmail);
-
-
+    public Flux<String> generateContent(String passcode,EmailRequest emailRequest) {
+        String userEmail = sessionService.getEmail(passcode);
+        if(userEmail==null){throw new SessionInvalidException("Please login");}
 
 
 

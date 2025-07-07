@@ -4,73 +4,96 @@ const limit = 10000;
 let savedRange = null;
 
 async function showLoginModal() {
-  return new Promise(async (resolve) => {
-    try {
-      const silentResponse = await chrome.runtime.sendMessage({
-        type: 'CHECK_LOGIN_STATUS',
-      });
-
-      if (silentResponse && silentResponse.success && silentResponse.token) {
-        console.log('User is already logged in, token:', silentResponse.token);
-        await chrome.storage.local.set({
-          googleAccessToken: silentResponse.token,
-        });
-        resolve();
-        return;
-      }
-    } catch (e) {
-      console.warn('Silent login check failed or no token:', e);
-    }
-
+  return new Promise(async (resolve, reject) => {
+    // 🧼 Remove any existing modal
     document.getElementById('ai-login-modal-overlay')?.remove();
 
+    // 🧱 Create overlay
     const overlay = document.createElement('div');
     overlay.id = 'ai-login-modal-overlay';
 
+    // 📦 Create content box
     const content = document.createElement('div');
     content.id = 'ai-login-modal-content';
 
+    // ❌ Close button
+    const closeBtn = document.createElement('span');
+    closeBtn.textContent = '✖';
+    closeBtn.style.position = 'absolute';
+    closeBtn.style.top = '10px';
+    closeBtn.style.right = '15px';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.fontSize = '16px';
+    closeBtn.onclick = () => {
+      overlay.remove();
+      reject('User cancelled login');
+    };
+
+    // 📝 Title
     const title = document.createElement('h3');
     title.textContent = 'Login Required';
+    title.style.marginBottom = '10px';
 
+    // 🗯️ Message
     const messagePara = document.createElement('p');
     messagePara.textContent =
       'Please log in with your Google account to use SmartCompose+.';
+    messagePara.style.marginBottom = '20px';
 
+    // 🔘 Login button
     const loginButton = document.createElement('button');
     loginButton.id = 'ai-login-button';
-    loginButton.textContent = 'Login with Google';
+    loginButton.textContent = 'Login';
 
     loginButton.addEventListener('click', async () => {
-      loginButton.textContent = 'Logging in...';
       loginButton.disabled = true;
+      loginButton.textContent = 'Logging in...';
       loginButton.style.animation = 'glow 1s infinite alternate';
 
       try {
+        // 🚀 Step 1: Open Google OAuth screen
         const response = await chrome.runtime.sendMessage({
-          type: 'LOGIN_WITH_GOOGLE',
+          type: 'START_GOOGLE_LOGIN',
         });
 
-        if (response.success && response.token) {
-          console.log('Successfully logged in, token:', response.token);
-          await chrome.storage.local.set({ googleAccessToken: response.token });
-          overlay.remove();
-          resolve();
-        } else {
-          console.error('Login failed:', response.error);
-          showErrorModal(`Google login failed: ${response.error}`, null, null);
-          overlay.remove();
-          resolve();
+        // Check for id_token instead of code
+        if (!response.success || !response.id_token) {
+          throw new Error(
+            response.error || 'No ID token received from auth flow'
+          );
         }
-      } catch (error) {
-        console.error('Error during login message:', error);
-        showErrorModal(
-          `An error occurred during login: ${error.message}`,
-          null,
-          null
+
+        // 📡 Step 2: Send auth code to your backend
+        const backendRes = await fetch(
+          'http://localhost:8080/api/auth/google/verify',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: response.id_token }),
+          }
         );
+
+        if (!backendRes.ok) {
+          throw new Error('Backend rejected auth code');
+        }
+
+        const data = await backendRes.json();
+        if (!data.sessionKey) {
+          throw new Error('No sessionKey returned by backend');
+        }
+
+        // 💾 Step 3: Store session key in extension cache
+        console.log(data.sessionKey);
+
+        chrome.storage.local.set({ sessionKey: data.sessionKey });
+
         overlay.remove();
-        resolve();
+        resolve(); // 🎉 Auth complete
+      } catch (err) {
+        console.error('[Login Error]', err);
+        alert('Login failed: ' + err.message);
+        overlay.remove();
+        reject(err);
       } finally {
         loginButton.textContent = 'Login with Google';
         loginButton.disabled = false;
@@ -78,6 +101,8 @@ async function showLoginModal() {
       }
     });
 
+    // 🧩 Add all pieces
+    content.appendChild(closeBtn);
     content.appendChild(title);
     content.appendChild(messagePara);
     content.appendChild(loginButton);
@@ -114,6 +139,9 @@ function showErrorModal(message, wrapper, originalText) {
     }
 
     overlay.remove();
+    if (message == 'Please login') {
+      showLoginModal();
+    }
   });
 
   content.appendChild(title);
@@ -309,17 +337,17 @@ pen.addEventListener('click', async () => {
         `The text selection is too large, please select a smaller text for accurate results.`
       );
     }
-    // Retrieve the stored Google Access Token for rewrite
-    const result = await chrome.storage.local.get('googleAccessToken');
-    const googleAccessToken = result.googleAccessToken;
+    const result = await chrome.storage.local.get('sessionKey');
+    const sessionKey = result.sessionKey;
 
-    if (!googleAccessToken) {
-      throw new Error('User not authenticated. Please log in.');
+    if (!sessionKey) {
+      await showLoginModal();
+      return;
     }
 
     const headers = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${googleAccessToken}`, // Send token in header
+      Authorization: sessionKey,
     };
 
     await streamSSEWithInjection(url, payload, 1, originalText, headers); // Pass headers
@@ -405,15 +433,7 @@ const createButton = (className, text, tooltip) => {
 };
 
 const injectButton = async (val) => {
-  await showLoginModal();
-
-  const result = await chrome.storage.local.get('googleAccessToken');
-  const accessToken = result.googleAccessToken;
-
-  if (!accessToken) {
-    console.log('User is not logged in after modal, not injecting buttons.');
-    return;
-  }
+  // again if not stored
   const toolbar = findComposeToolbar();
   if (!toolbar) return console.log('No toolbar found');
 
@@ -489,6 +509,8 @@ const injectButton = async (val) => {
     });
     composeBox.dispatchEvent(event);
   }
+  const { sessionKey } = await chrome.storage.local.get('sessionKey');
+  if (!sessionKey) return showLoginModal();
 };
 
 const handleButtonClick = async (
@@ -503,16 +525,17 @@ const handleButtonClick = async (
     button.disabled = true;
     button.style.animation = 'glow 1s infinite alternate';
 
-    const result = await chrome.storage.local.get('googleAccessToken');
-    const googleAccessToken = result.googleAccessToken;
+    const result = await chrome.storage.local.get('sessionKey');
+    const sessionKey = result.sessionKey;
 
-    if (!googleAccessToken) {
-      throw new Error('User not authenticated. Please log in.');
+    if (!sessionKey) {
+      await showLoginModal();
+      return;
     }
 
-    const commonHeaders = {
+    const headers = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${googleAccessToken}`,
+      Authorization: sessionKey,
     };
 
     if (endpoint !== '/api/email/subject') {
@@ -529,7 +552,7 @@ const handleButtonClick = async (
         );
       }
 
-      await streamSSEWithInjection(url, payload, 0, '', commonHeaders);
+      await streamSSEWithInjection(url, payload, 0, '', headers);
     } else {
       const response = await fetch(`http://localhost:8080${endpoint}`, {
         method: 'POST',

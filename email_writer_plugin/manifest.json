@@ -3,13 +3,6 @@
   "description": "AI-powered email-assistant",
   "version": "1.0",
   "manifest_version": 3,
-  "oauth2": {
-    "client_id": "1090138335899-320jbe0nbgd0i0j6f268kb4a4t3svrgd.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile"
-    ]
-  },
   "background": {
     "service_worker": "background.js"
   },

@@ -19,33 +19,33 @@ public class EmailGenController {
 
     @PostMapping("/subject")
     public ResponseEntity<String> subject(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader("Authorization") String sessionKey,
             @RequestBody EmailRequest emailRequest) {
-        String response = emailGeneratorService.generateSubject(authorizationHeader, emailRequest);
+        String response = emailGeneratorService.generateSubject(sessionKey,emailRequest);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping(value = "/generate", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> generateEmail(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader("Authorization") String sessionKey,
             @RequestBody EmailRequest emailRequest) {
-        return emailGeneratorService.generateEmailReply(authorizationHeader, emailRequest)
+        return emailGeneratorService.generateEmailReply(sessionKey,emailRequest)
                 .map(chunk -> ServerSentEvent.builder(chunk).build());
     }
 
     @PostMapping(value = "/write", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> writeEmail(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader("Authorization") String sessionKey,
             @RequestBody EmailRequest emailRequest) {
-        return emailGeneratorService.generateEmail(authorizationHeader, emailRequest)
+        return emailGeneratorService.generateEmail(sessionKey,emailRequest)
                 .map(chunk -> ServerSentEvent.builder(chunk).build());
     }
 
     @PostMapping(value = "/rewrite", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> aiRewrite(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader("Authorization") String sessionKey,
             @RequestBody EmailRequest emailRequest) {
-        return emailGeneratorService.generateContent(authorizationHeader, emailRequest)
+        return emailGeneratorService.generateContent(sessionKey,emailRequest)
                 .map(chunk -> ServerSentEvent.builder(chunk).build());
     }
 }
