@@ -25,4 +25,10 @@ public class UserService {
                 })
                 .orElseGet(() -> userRepository.save(new User(googleId, email, sessionKey)));
     }
+
+    public String getSession(String email){
+        return userRepository.findByEmail(email).map(User::getSessionKey)
+                                                     .orElse(null);
+    }
+
 }

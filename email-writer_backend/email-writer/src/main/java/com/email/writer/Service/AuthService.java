@@ -57,6 +57,11 @@ public class AuthService {
         String sessionKey = generateSessionKey();
 
         // Save session to Redis
+        //this can happen,that same email se a person is loggining from somewherelse: we also need to invalidate current running session
+        //if that exists(from redis);(but not that email's assigned tokens:)
+        String exists =  userService.getSession(email);
+        if(exists!=null){sessionService.deleteKey(exists);}
+
         sessionService.saveSession(sessionKey, email);
 
         // Save user to your database

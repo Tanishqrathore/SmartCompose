@@ -28,4 +28,8 @@ public class SessionService {
     public String getEmail(String sessionKey) {
         return redisTemplate.opsForValue().get(sessionKey);
     }
+
+    public Boolean deleteKey(String key) {
+        return redisTemplate.delete(key);
+    }
 }

@@ -175,11 +175,13 @@ public class EmailGeneratorService {
     }
 
     public Flux<String> generateContent(String passcode,EmailRequest emailRequest) {
+
+        //session confirmation;
         String userEmail = sessionService.getEmail(passcode);
         if(userEmail==null){throw new SessionInvalidException("Please login");}
 
 
-
+        //rate limiting;
         if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
