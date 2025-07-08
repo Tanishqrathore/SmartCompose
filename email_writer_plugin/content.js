@@ -158,7 +158,12 @@ async function typeChunkText(target, text, delay = 2) {
     await new Promise((r) => setTimeout(r, delay));
   }
 }
-
+async function typeChunkTextToTextarea(textarea, chunk, delay = 2) {
+  for (const char of chunk) {
+    textarea.value += char;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
 async function streamSSEWithInjection(
   url,
   payload,
@@ -285,6 +290,299 @@ async function streamSSEWithInjection(
   }
 }
 
+async function streamSSEToTextarea(url, payload, headers, targetTextarea) {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error || `Request failed with status ${response.status}`
+      );
+    }
+
+    if (!response.body) {
+      throw new Error('Streaming failed: No response body.');
+    }
+
+    // const reader = response.body.getReader();
+    // const decoder = new TextDecoder('utf-8');
+    // let buffer = '';
+    // let result = '';
+
+    // while (true) {
+    //   const { value, done } = await reader.read();
+    //   if (done) break;
+
+    //   buffer += decoder.decode(value, { stream: true });
+    //   const lines = buffer.split('\n');
+    //   buffer = lines.pop();
+
+    //   for (const line of lines) {
+    //     if (line.startsWith('data:')) {
+    //       const chunk = line.slice(5).trim();
+    //       if (chunk !== '[DONE]') {
+    //         result += chunk;
+    //         targetTextarea.value = result;
+    //       }
+    //     }
+    //   }
+    // }
+
+    // if (buffer.trim()) {
+    //   result += buffer.trim();
+    //   targetTextarea.value = result;
+    // }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let bufferedText = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (line.startsWith('data:')) {
+          const chunk = line.slice(5);
+          if (chunk !== '[DONE]') {
+            bufferedText += chunk;
+
+            const parts = bufferedText.split('*');
+            for (let i = 0; i < parts.length - 1; i++) {
+              await typeChunkTextToTextarea(targetTextarea, parts[i]);
+              targetTextarea.appendChild(document.createElement('br'));
+              targetTextarea.appendChild(document.createElement('br'));
+            }
+            bufferedText = parts[parts.length - 1];
+          }
+        }
+      }
+    }
+    if (bufferedText.trim()) {
+      await typeChunkTextToTextarea(targetTextarea, bufferedText);
+    }
+  } catch (err) {
+    showErrorModal(err.message, null, null);
+  }
+}
+
+function showRewriteOverlay(originalText) {
+  document.getElementById('ai-rewrite-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ai-rewrite-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black for overlay */
+    backdrop-filter: blur(5px); /* BLUR BACKGROUND */
+    -webkit-backdrop-filter: blur(5px); /* For Safari support */
+  `;
+
+  // Inner content div to apply image-like styling
+  const contentDiv = document.createElement('div');
+  contentDiv.style.cssText = `
+    background: white;
+    border-radius: 8px; /* Rounded corners */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* Softer, slightly larger shadow */
+    padding: 24px; /* Generous padding */
+    width: 480px; /* Specific width */
+    box-sizing: border-box; /* Include padding in width */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; /* Consistent font */
+    color: #333; /* Default text color */
+    position: relative; /* For positioning close button */
+  `;
+
+  contentDiv.innerHTML = `
+    <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 20px; font-weight: 500; color: #333;">AI Rewrite</h3>
+    <label style="font-weight: 500; font-size: 14px; color: #333; display: block; margin-bottom: 5px;">Original Text:</label><br/>
+    <textarea id="ai-original-text" readonly style="width: 100%; height: 100px; margin-bottom: 15px; padding: 8px; border: 1px solid #dcdcdc; border-radius: 4px; font-size: 14px; color: #333; resize: vertical; box-sizing: border-box;">${originalText}</textarea>
+
+    <label style="font-weight: 500; font-size: 14px; color: #333; display: block; margin-bottom: 5px;">Suggestions (optional):</label><br/>
+    <textarea id="ai-suggestion-text" placeholder="e.g., Make it more polite or summarize it" style="width: 100%; height: 80px; margin-bottom: 20px; padding: 8px; border: 1px solid #dcdcdc; border-radius: 4px; font-size: 14px; color: #333; resize: vertical; box-sizing: border-box;"></textarea>
+
+    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+      <button id="ai-close-overlay">Close</button>
+      <button id="ai-apply-btn">Apply</button>
+      <button id="ai-rewrite-btn">Rewrite with AI</button>
+    </div>
+  `;
+
+  overlay.appendChild(contentDiv);
+  document.body.appendChild(overlay);
+
+  const originalTextArea = document.getElementById('ai-original-text');
+  const suggestionTextArea = document.getElementById('ai-suggestion-text');
+  const applyBtn = document.getElementById('ai-apply-btn');
+  const rewriteBtn = document.getElementById('ai-rewrite-btn');
+  const closeOverlayBtn = document.getElementById('ai-close-overlay');
+
+  // Helper function to apply common button styles and hover effects
+  const applyButtonHoverStyles = (
+    button,
+    baseBgColor,
+    hoverBgColor,
+    textColor
+  ) => {
+    button.style.cssText = `
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      background: ${baseBgColor};
+      color: ${textColor};
+      transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    `;
+    button.onmouseover = () => {
+      button.style.transform = 'scale(1.03)';
+      button.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+      button.style.backgroundColor = hoverBgColor;
+    };
+    button.onmouseout = () => {
+      button.style.transform = 'scale(1)';
+      button.style.boxShadow = 'none';
+      button.style.backgroundColor = baseBgColor;
+    };
+  };
+
+  // Apply styles to main modal buttons
+  applyButtonHoverStyles(closeOverlayBtn, '#e0e0e0', '#d0d0d0', '#333');
+  applyButtonHoverStyles(applyBtn, '#27ae60', '#229954', 'white');
+  applyButtonHoverStyles(rewriteBtn, '#007bff', '#0056b3', 'white');
+
+  closeOverlayBtn.onclick = () => {
+    overlay.remove();
+  };
+
+  // Preserve original logic for Apply button, with updated button styling
+  applyBtn.onclick = () => {
+    const updatedText = originalTextArea.value;
+    const initialOriginalText = savedRange?.toString(); // Saved for revert
+
+    if (savedRange) {
+      savedRange.deleteContents();
+
+      const wrapper = document.createElement('span');
+      wrapper.textContent = updatedText;
+      wrapper.style.backgroundColor = '#b7d9ff';
+      wrapper.style.borderRadius = '4px';
+      wrapper.style.padding = '2px 4px';
+      wrapper.className = 'ai-edit-block';
+
+      const buttonContainer = document.createElement('span');
+      buttonContainer.style.marginLeft = '6px';
+
+      const approveBtn = document.createElement('button');
+      approveBtn.textContent = 'Looks good!';
+      // Apply hover styles for approve button
+      applyButtonHoverStyles(approveBtn, '#4caf50', '#429e46', 'white');
+      // Make approve button smaller
+      approveBtn.style.padding = '1px 6px';
+      approveBtn.style.fontSize = '11px';
+      approveBtn.style.marginRight = '4px'; // Specific margin
+
+      const revertBtn = document.createElement('button');
+      revertBtn.textContent = 'Revert';
+      // Apply hover styles for revert button
+      applyButtonHoverStyles(revertBtn, '#800020', '#6b001a', 'white');
+      // Make revert button smaller
+      revertBtn.style.padding = '1px 6px';
+      revertBtn.style.fontSize = '11px';
+
+      buttonContainer.appendChild(approveBtn);
+      buttonContainer.appendChild(revertBtn);
+
+      savedRange.insertNode(buttonContainer);
+      savedRange.insertNode(wrapper);
+
+      approveBtn.onclick = () => {
+        wrapper.style.backgroundColor = '';
+        buttonContainer.remove();
+        if (window.getSelection) {
+          const selection = window.getSelection();
+          if (selection.empty) {
+            selection.empty();
+          } else if (selection.removeAllRanges) {
+            // Added for robustness
+            selection.removeAllRanges();
+          }
+        }
+      };
+
+      revertBtn.onclick = () => {
+        wrapper.textContent = initialOriginalText;
+        wrapper.style.backgroundColor = '';
+        buttonContainer.remove();
+      };
+    }
+
+    document.getElementById('ai-rewrite-overlay')?.remove();
+  };
+
+  // Preserve original logic for Rewrite button
+  rewriteBtn.onclick = async () => {
+    rewriteBtn.innerHTML = 'Rewriting...';
+    rewriteBtn.disabled = true;
+    rewriteBtn.style.animation = 'glow 1s infinite alternate';
+
+    try {
+      const { sessionKey } = await chrome.storage.local.get('sessionKey');
+      if (!sessionKey) {
+        await showLoginModal();
+        overlay.remove(); // This closes the modal if login is required and user cancels/fails
+        rewriteBtn.innerHTML = 'Rewrite with AI';
+        rewriteBtn.disabled = false;
+        rewriteBtn.style.animation = '';
+        return;
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: sessionKey,
+      };
+
+      const payload = {
+        emailContent: originalTextArea.value,
+        userInput: suggestionTextArea.value,
+      };
+      originalTextArea.value = '';
+      // Calls streamSSEToTextarea, which targets the modal's originalTextArea
+      // The modal remains open after rewrite for user to click 'Apply'
+      await streamSSEToTextarea(
+        'http://localhost:8080/api/email/rewrite',
+        payload,
+        headers,
+        originalTextArea
+      );
+    } catch (error) {
+      console.error('Error during AI rewrite:', error);
+      alert(`Rewrite failed: ${error.message}`);
+    } finally {
+      rewriteBtn.innerHTML = 'Rewrite with AI';
+      rewriteBtn.disabled = false;
+      rewriteBtn.style.animation = '';
+    }
+  };
+}
 // AI Rewrite feature
 const pen = document.createElement('div');
 pen.id = 'rewrite-pen';
@@ -323,14 +621,14 @@ pen.addEventListener('click', async () => {
 
   pen.innerText = '⏳';
   pen.style.display = 'block';
-  const url = 'http://localhost:8080/api/email/rewrite';
+  // const url = 'http://localhost:8080/api/email/rewrite';
 
-  const payload = {
-    emailContent: originalText,
-    tone: 'professional',
-    length: null,
-    userInput: '',
-  };
+  // const payload = {
+  //   emailContent: originalText,
+  //   tone: 'professional',
+  //   length: null,
+  //   userInput: '',
+  // };
   try {
     if (originalText.length > limit) {
       throw new Error(
@@ -344,20 +642,19 @@ pen.addEventListener('click', async () => {
       await showLoginModal();
       return;
     }
+    showRewriteOverlay(originalText);
+    // const headers = {
+    //   'Content-Type': 'application/json',
+    //   Authorization: sessionKey,
+    // };
 
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: sessionKey,
-    };
-
-    await streamSSEWithInjection(url, payload, 1, originalText, headers); // Pass headers
+    // await streamSSEWithInjection(url, payload, 1, originalText, headers); // Pass headers
   } catch (err) {
     console.error('Rewrite failed:', err);
     showErrorModal(err.message, null, null);
   } finally {
     pen.innerText = '✨';
     pen.style.display = 'none';
-    savedRange = null;
   }
 });
 
@@ -556,7 +853,7 @@ const handleButtonClick = async (
     } else {
       const response = await fetch(`http://localhost:8080${endpoint}`, {
         method: 'POST',
-        headers: commonHeaders,
+        headers: headers,
         body: JSON.stringify({
           emailContent: getEmailContent(),
           tone: tone || 'professional',

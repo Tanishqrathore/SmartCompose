@@ -135,7 +135,7 @@ public class EmailGeneratorService {
         String userEmail = sessionService.getEmail(passcode);
         if(userEmail==null){throw new SessionInvalidException("Please login");}
 
-        if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
+        if (!rateLimiter.isAllowed(userEmail, 15, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
 
@@ -182,13 +182,16 @@ public class EmailGeneratorService {
 
 
         //rate limiting;
-        if (!rateLimiter.isAllowed(userEmail, 5, 200)) {
+        if (!rateLimiter.isAllowed(userEmail, 15, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
 
         StringBuilder prompt = new StringBuilder();
 
         String originalText = emailRequest.getEmailContent();
+        String modifyrequest = emailRequest.getUserInput();
+        if(modifyrequest.isEmpty()){modifyrequest="Do as said";}
+
         int originalWordCount = calculateWordCount(originalText);
 
         prompt.append("Example 1:\n");
@@ -196,7 +199,9 @@ public class EmailGeneratorService {
         prompt.append("Rewrite: A swift, russet fox leaps above the sluggish canine.\n\n");
 
         prompt.append("Your primary task is to rewrite the following original text into a single, continuous block. No paragraph breaks, no extra newlines within the text.");
-        prompt.append("It is **absolutely critical** that the rewritten text maintains the *exact same word count* as the original. You must not add or remove any words; only rephrase the existing content.");
+        prompt.append("It is **absolutely critical** that the rewritten text maintains the *exact same word count* as the original. Just rephrase the existing content,based on user demand");
+        prompt.append("User demand:");
+        prompt.append(modifyrequest);
         prompt.append("Adopt a professional and formal tone throughout the rewrite.\n");
         prompt.append("If the word count of your rewrite is not identical to the original, or if you introduce any paragraph breaks, the response will be considered incorrect and unusable.\n");
         prompt.append("Respond with *only* the rewritten text, without any introductory phrases like 'Here is the rewrite:' or concluding remarks.\n\n");
