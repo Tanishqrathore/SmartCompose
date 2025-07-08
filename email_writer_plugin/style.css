@@ -1,4 +1,5 @@
 /* Rewrite Pen */
+
 #rewrite-pen {
   position: absolute;
   display: none;
@@ -280,5 +281,99 @@
   }
   100% {
     box-shadow: 0 0 20px rgba(66, 133, 244, 1);
+  }
+}
+
+.loader-overlay {
+  position: absolute;
+  top: 8px; /* adjust based on padding/line-height */
+  left: 12px; /* adjust to align with text */
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 10;
+  pointer-events: none; /* so user can still click/scroll */
+}
+
+.blinking-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.blinking-dots span {
+  width: 8px;
+  height: 8px;
+  background-color: #4285f4; /* Gmail blue */
+  border-radius: 50%;
+  animation: blink 1.4s infinite ease-in-out both;
+}
+
+.blinking-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.blinking-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes blink {
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.textarea-loader-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.loader-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: none;
+  z-index: 10;
+}
+
+.blinking-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.blinking-dots span {
+  width: 8px;
+  height: 8px;
+  background-color: #4285f4;
+  border-radius: 50%;
+  animation: blink 1.4s infinite ease-in-out both;
+}
+.blinking-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.blinking-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes blink {
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
   }
 }

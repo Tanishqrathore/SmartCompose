@@ -152,6 +152,27 @@ function showErrorModal(message, wrapper, originalText) {
   document.body.appendChild(overlay);
 }
 
+function addLoader(component) {
+  const loader = document.createElement('div');
+  loader.className = 'loader-overlay';
+  loader.setAttribute('data-loader', 'true');
+  loader.innerHTML = `
+    <div class="blinking-dots">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  `;
+
+  component.style.position = 'relative';
+  component.appendChild(loader);
+}
+
+function removeLoader(component) {
+  const loader = component.querySelector('[data-loader="true"]');
+  if (loader) loader.remove();
+}
+
 async function typeChunkText(target, text, delay = 2) {
   for (const char of text) {
     target.appendChild(document.createTextNode(char));
@@ -194,6 +215,7 @@ async function streamSSEWithInjection(
   }
 
   try {
+    addLoader(rewrittenSpan);
     const response = await fetch(url, {
       method: 'POST',
       headers: headers,
@@ -216,6 +238,7 @@ async function streamSSEWithInjection(
     let buffer = '';
     let bufferedText = '';
 
+    removeLoader(rewrittenSpan);
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -286,12 +309,56 @@ async function streamSSEWithInjection(
     console.log('✅ Stream complete, buttons added');
   } catch (err) {
     console.error('❌ Stream error:', err);
-    showErrorModal(err.message, wrapper, originalText);
+    if (err.message == 'Please login') {
+      showLoginModal();
+    } else {
+      showErrorModal(err.message, wrapper, originalText);
+    }
   }
+}
+
+function addTextareaLoader(textarea) {
+  if (
+    !textarea ||
+    textarea.parentElement.classList.contains('textarea-loader-wrapper')
+  )
+    return;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'textarea-loader-wrapper';
+
+  textarea.parentNode.insertBefore(wrapper, textarea);
+  wrapper.appendChild(textarea);
+
+  const loader = document.createElement('div');
+  loader.className = 'loader-overlay';
+  loader.setAttribute('data-loader', 'true');
+  loader.innerHTML = `
+    <div class="blinking-dots">
+      <span></span><span></span><span></span>
+    </div>
+  `;
+
+  wrapper.appendChild(loader);
+}
+
+function removeTextareaLoader(textarea) {
+  const wrapper = textarea.parentElement;
+  if (!wrapper || !wrapper.classList.contains('textarea-loader-wrapper'))
+    return;
+
+  // Remove loader
+  const loader = wrapper.querySelector("[data-loader='true']");
+  if (loader) loader.remove();
+
+  // Move textarea out and remove wrapper
+  wrapper.parentNode.insertBefore(textarea, wrapper);
+  wrapper.remove();
 }
 
 async function streamSSEToTextarea(url, payload, headers, targetTextarea) {
   try {
+    addTextareaLoader(targetTextarea);
     const response = await fetch(url, {
       method: 'POST',
       headers,
@@ -342,7 +409,7 @@ async function streamSSEToTextarea(url, payload, headers, targetTextarea) {
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let bufferedText = '';
-
+    removeTextareaLoader(targetTextarea);
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -884,7 +951,12 @@ const handleButtonClick = async (
     }
   } catch (error) {
     console.error('Error generating reply:', error);
-    showErrorModal(error.message, null, null);
+    if (error.message == 'Please login') {
+      showLoginModal();
+    } else {
+      console.log(error.message);
+      showErrorModal(error.message, null, null);
+    }
   } finally {
     button.innerHTML =
       endpoint === '/api/email/subject'
