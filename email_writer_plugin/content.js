@@ -308,6 +308,7 @@ async function streamSSEWithInjection(
 
     console.log('✅ Stream complete, buttons added');
   } catch (err) {
+    removeLoader(rewrittenSpan);
     console.error('❌ Stream error:', err);
     if (err.message == 'Please login') {
       showLoginModal();

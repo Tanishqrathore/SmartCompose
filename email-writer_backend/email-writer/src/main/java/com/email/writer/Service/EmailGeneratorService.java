@@ -192,33 +192,65 @@ public class EmailGeneratorService {
         if (!rateLimiter.isAllowed(userEmail, 15, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
-
         String style = redisService.getStyle(userEmail);
         if(style==null){style="Follow a professional style";}
 
         StringBuilder prompt = new StringBuilder();
 
-        String originalText = emailRequest.getEmailContent();
-        String modifyrequest = emailRequest.getUserInput();
-        if(modifyrequest.isEmpty()){modifyrequest="Do as said";}
+        // --- 1. Define Style (with improved clarity and fallback) ---
+        // Ensure style has meaningful content; otherwise, set a default.
+        String actualStyle = (style != null && !style.trim().isEmpty() && style.trim().length() > 10)
+                ? style.trim()
+                : "a standard, clear, and professional writing style";
 
-        int originalWordCount = calculateWordCount(originalText);
+        prompt.append("PRIORITY 1: Emulate the writing style provided below throughout your rewrite.\n");
+        prompt.append("The style sample is for stylistic reference ONLY. Do NOT extract content or facts from it.\n");
+        prompt.append("If the provided style is unclear or contradictory, revert to a standard professional writing style for the rewrite.\n");
+        prompt.append("--- STYLE SAMPLE START ---\n").append(actualStyle).append("\n--- STYLE SAMPLE END ---\n\n");
 
-        prompt.append("Example 1:\n");
+
+        // --- 2. Define Core Task & Critical Constraints (Highly Emphasized) ---
+        prompt.append("PRIORITY 2: Your core task is to REWRITE the 'Original Text' provided below.\n");
+        prompt.append("It is **ABSOLUTELY CRITICAL** that the rewritten text adheres to the following non-negotiable rules:\n");
+        prompt.append("- The rewritten text MUST be a **single, continuous block** of text. No paragraph breaks, no extra newlines, no bullet points, no numbered lists.\n");
+        prompt.append("- The rewritten text MUST maintain the **EXACT SAME WORD COUNT** as the 'Original Text'. Do NOT add or remove a single word. Only rephrase existing content.\n\n");
+
+
+        // --- 3. Provide Example (Reinforced with rules) ---
+        // Make the example even more explicit about the word count and single block rule.
+        prompt.append("--- EXAMPLE START ---\n");
         prompt.append("Original Text: \"The quick brown fox jumps over the lazy dog.\" (9 words)\n");
-        prompt.append("Rewrite: A swift, russet fox leaps above the sluggish canine.\n\n");
-        prompt.append("Follow this writing style:");
-        prompt.append(style);
-        prompt.append("Your primary task is to rewrite the following original text into a single, continuous block. No paragraph breaks, no extra newlines within the text.");
-        prompt.append("It is **absolutely critical** that the rewritten text maintains the *exact same word count* as the original. Just rephrase the existing content,based on user demand");
-        prompt.append("User demand:");
-        prompt.append(modifyrequest);
-        prompt.append("Adopt a professional and formal tone throughout the rewrite.\n");
-        prompt.append("If the word count of your rewrite is not identical to the original, or if you introduce any paragraph breaks, the response will be considered incorrect and unusable.\n");
-        prompt.append("Respond with *only* the rewritten text, without any introductory phrases like 'Here is the rewrite:' or concluding remarks.\n\n");
+        prompt.append("User Demand: Make it more formal.\n");
+        prompt.append("Rewrite: \"A swift, russet fox leaps above the sluggish canine.\" (9 words)\n"); // Add word count to example rewrite
+        prompt.append("--- EXAMPLE END ---\n\n");
 
-        prompt.append("Original Text: \"").append(originalText).append("\" (").append(originalWordCount).append(" words)\n");
+
+        // --- 4. User Demand & Tone ---
+        String originalText = emailRequest.getEmailContent();
+        String modifyRequest = (emailRequest.getUserInput() != null && !emailRequest.getUserInput().trim().isEmpty())
+                ? emailRequest.getUserInput().trim()
+                : "Rephrase the content while maintaining its original meaning."; // Default user demand
+
+
+
+        prompt.append("User Demand for Rewrite: ").append(modifyRequest).append("\n");
+        prompt.append("Tone for Rewrite: Adopt a professional and formal tone throughout.\n\n"); // Keep this if always formal
+
+        // --- 5. Output Instructions (Very Specific) ---
+        prompt.append("--- REWRITE INSTRUCTIONS ---\n");
+        prompt.append("1. Read the 'Original Text' and the 'User Demand' carefully.\n");
+        prompt.append("2. Apply the specified 'Tone' and emulate the 'STYLE SAMPLE'.\n");
+        prompt.append("3. Rewrite the text, ensuring it is a single, continuous block.\n");
+        prompt.append("4. Verify that the rewritten text has the **IDENTICAL WORD COUNT** as the Original Text.\n");
+        prompt.append("5. Provide **ONLY** the rewritten text. Do NOT include introductory phrases (e.g., \"Here is the rewrite:\", \"Rewritten:\"), original text, word counts, or any other additional commentary.\n");
+        prompt.append("Ensure the rewritten text is **properly punctuated**, with all **necessary capital letters**, and correct grammar.");
+        prompt.append("--- END REWRITE INSTRUCTIONS ---\n\n");
+
+
+        // --- 6. The Actual Task Input ---
+        prompt.append("Original Text: \"").append(originalText).append("\" (");
         prompt.append("Rewrite:");
+
 
         if (prompt.toString().length() > promptLimit) {
             throw new PromptTooLargeException("Prompt exceeds Gemini's maximum allowed size.");
@@ -227,62 +259,91 @@ public class EmailGeneratorService {
         return streamPromptToGemini(prompt.toString());
     }
 
-    private String buildPrompt(EmailRequest emailRequest, int flag,String style) {
+    private String buildPrompt(EmailRequest emailRequest, int flag, String style) {
         StringBuilder prompt = new StringBuilder();
 
-        prompt.append("Study this writing style:");
-        prompt.append(style);
-        prompt.append("I want any content you return, written in this style only.");
+        // --- Style Injection (Refined for Emulation and Fallback) ---
+        if (style != null && !style.trim().isEmpty() && style.trim().length() > 10) { // Add a length check for meaningful style
+            prompt.append("PRIORITY: Emulate the writing style of the following text throughout your response.\n")
+                    .append("The text is provided for stylistic reference ONLY. Do NOT extract or include any content, facts, or topics from this style sample into the generated email. Focus purely on tone, vocabulary, sentence structure, and overall presentation.\n")
+                    .append("If the provided style is too short, unclear, or contradictory, revert to a standard professional writing style for the generated email.\n")
+                    .append("--- STYLE SAMPLE START ---\n")
+                    .append(style.trim()).append("\n") // Trim whitespace for cleaner input
+                    .append("--- STYLE SAMPLE END ---\n\n");
+        } else {
+            // Explicitly state fallback if no style is provided or it's too short
+            prompt.append("PRIORITY: Use a standard professional writing style for the generated email.\n\n");
+        }
 
+        // --- Core Task Definition ---
+        prompt.append("Your task is to generate an email based on the following instructions.\n")
+                .append("Do NOT include a subject line unless explicitly asked to (only for Flag 2).");
+
+
+        // --- Flag 2: Subject Line Generation ---
         if (flag == 2) {
-            prompt.append("Generate a concise and appropriate subject line for the following email content. Respond with only the subject line, nothing else:\n")
-                    .append(emailRequest.getUserInput());
+            // More precise instruction for subject line
+            prompt.append("Generate only a concise, relevant, and appropriate subject line for the following email content. Provide ONLY the subject line text, with no additional words, punctuation, or formatting around it.\n")
+                    .append("Email Content for Subject:\n").append(emailRequest.getUserInput());
             return prompt.toString();
         }
 
+        // --- Flag 0: Email Reply ---
+        // --- Flag 1: Compose New Email ---
         if (flag == 0) {
-            prompt.append("Draft a professional and concise email reply to the following. Do not include a subject line.");
-        } else {
-            prompt.append("Compose a well-structured email incorporating the provided key points. Do not include a subject line.");
+            prompt.append("\n\nObjective: Draft an email reply.");
+        } else { // flag == 1
+            prompt.append("\n\nObjective: Compose a new email.");
         }
 
-        String tone = (emailRequest.getTone() != null && !emailRequest.getTone().isEmpty()) ? emailRequest.getTone() : "professional";
-        prompt.append(" Maintain a ").append(tone).append(" tone.");
+        // --- Tone Preference (with clear default) ---
+        String tone = (emailRequest.getTone() != null && !emailRequest.getTone().isEmpty()) ? emailRequest.getTone().toLowerCase() : "professional";
+        // Using an explicit instruction for tone
+        prompt.append("\nTone: Ensure the email's tone is strictly ").append(tone).append(".");
 
+
+        // --- Content Inclusion based on Flag ---
         if (flag == 0) {
-            prompt.append("\n\nOriginal Email to reply to:\n").append(emailRequest.getEmailContent())
-                    .append("\n\nPoints to address in the reply:\n");
+            prompt.append("\n\nOriginal Email Context (for reply):\n").append(emailRequest.getEmailContent());
+            prompt.append("\n\nKey Points to Address in the Reply:\n");
             if (emailRequest.getUserInput() != null && !emailRequest.getUserInput().isEmpty()) {
                 prompt.append(emailRequest.getUserInput());
             } else {
-                prompt.append("No specific points provided, reply generally based on the original email.");
+                prompt.append("No specific points provided. Generate a general and polite reply based on the Original Email Context.");
             }
-        } else {
-            prompt.append("\n\nKey points to include in the email:\n").append(emailRequest.getUserInput());
-            System.out.println(emailRequest.getUserInput());
+        } else { // flag == 1
+            prompt.append("\n\nCore Information to Include:\n").append(emailRequest.getUserInput());
+            // System.out.println(emailRequest.getUserInput()); // This is a server-side log, good for debugging
         }
 
-        prompt.append("\n\nEmail Length: ");
-        switch (emailRequest.getLength()) {
+        // --- Length Control (Refined with more specific ranges) ---
+        prompt.append("\n\nEmail Length Guidelines:");
+        switch (emailRequest.getLength() != null ? emailRequest.getLength().toLowerCase() : "default") {
             case "short":
-                prompt.append("Keep the email brief, around 50-100 words. Avoid multiple paragraphs.");
+                prompt.append(" The email should be concise, approximately 75-125 words. Use 1-2 paragraphs.");
                 break;
             case "long":
-                prompt.append("Make the email comprehensive, between 200-400 words. Use multiple paragraphs for clarity.");
+                prompt.append(" The email should be comprehensive, approximately 250-400 words. Use 3-5 well-developed paragraphs for clarity.");
                 break;
             case "crisp":
-                prompt.append("Provide a very direct response, under 10 words.");
+                // "Crisp" is very short, ensure it's actionable.
+                prompt.append(" The email should be extremely brief and to the point, ideally 10-25 words. Focus on conveying the core message directly.");
                 break;
-            case null, default:
-                prompt.append("Generate an email of appropriate length for the context, typically 100-200 words, with a clear and professional structure.");
+            case "default": // Explicitly handling null/default case
+            case "appropriate": // Assuming "appropriate" maps to default behavior
+            default:
+                prompt.append(" The email should be of an appropriate length for the content and context, typically 150-250 words, with a clear and professional structure (2-3 paragraphs).");
                 break;
         }
 
-        prompt.append("\n\nFormatting Guidelines:\n");
-        prompt.append("Please write your response using a single asterisk (*) on a separate line to indicate each paragraph break. Do not use any other newlines between paragraphs, and ensure your response does not end with an asterisk.\n");
-        prompt.append("- Do not generate a subject line.\n");
-        prompt.append("- Provide only the email content, ready to be sent directly, without any introductory phrases like 'Here's the AI-generated email:'.");
-
+        // --- Output Formatting (Reinforced) ---
+        prompt.append("\n\nOutput Format Requirements:\n");
+        prompt.append("- Use a single asterisk (*) on a separate line to indicate each new paragraph break. This is the ONLY allowed paragraph separator.\n");
+        prompt.append("- Do NOT use any other newlines between paragraphs.\n");
+        prompt.append("- Ensure the response does NOT end with an asterisk.\n");
+        prompt.append("- Provide ONLY the email content. Do NOT include any introductory phrases (e.g., 'Here's your email:', 'Subject:', 'Body:'), salutations (e.g., 'Dear [Name],'), or closings (e.g., 'Sincerely,'). Start directly with the first word of the email body.\n");
+        prompt.append("- Maintain a consistent and professional tone throughout the email.\n");
+        prompt.append("Ensure the rewritten text is **properly punctuated**, with all **necessary capital letters**, and correct grammar.");
         return prompt.toString();
     }
 }
