@@ -15,7 +15,7 @@ import java.util.Collections;
 @Service
 public class AuthService {
 
-    private final SessionService sessionService;
+    private final RedisService redisService;
     private final UserService userService;
 
     private static final SecureRandom secureRandom = new SecureRandom();
@@ -26,9 +26,9 @@ public class AuthService {
 
 
 
-    public AuthService(UserService userService, SessionService sessionService) {
+    public AuthService(UserService userService, RedisService redisService) {
         this.userService = userService;
-        this.sessionService = sessionService;
+        this.redisService = redisService;
     }
 
 
@@ -60,9 +60,10 @@ public class AuthService {
         //this can happen,that same email se a person is loggining from somewherelse: we also need to invalidate current running session
         //if that exists(from redis);(but not that email's assigned tokens:)
         String exists =  userService.getSession(email);
-        if(exists!=null){sessionService.deleteKey(exists);}
+        if(exists!=null){
+            redisService.deleteKey(exists);}
 
-        sessionService.saveSession(sessionKey, email);
+        redisService.saveSession(sessionKey, email);
 
         // Save user to your database
         return userService.saveUser(googleId, email, sessionKey);

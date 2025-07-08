@@ -376,35 +376,6 @@ async function streamSSEToTextarea(url, payload, headers, targetTextarea) {
       throw new Error('Streaming failed: No response body.');
     }
 
-    // const reader = response.body.getReader();
-    // const decoder = new TextDecoder('utf-8');
-    // let buffer = '';
-    // let result = '';
-
-    // while (true) {
-    //   const { value, done } = await reader.read();
-    //   if (done) break;
-
-    //   buffer += decoder.decode(value, { stream: true });
-    //   const lines = buffer.split('\n');
-    //   buffer = lines.pop();
-
-    //   for (const line of lines) {
-    //     if (line.startsWith('data:')) {
-    //       const chunk = line.slice(5).trim();
-    //       if (chunk !== '[DONE]') {
-    //         result += chunk;
-    //         targetTextarea.value = result;
-    //       }
-    //     }
-    //   }
-    // }
-
-    // if (buffer.trim()) {
-    //   result += buffer.trim();
-    //   targetTextarea.value = result;
-    // }
-
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
@@ -796,6 +767,278 @@ const createButton = (className, text, tooltip) => {
   return button;
 };
 
+function createStyleButton() {
+  document.querySelector(`.add-style-btn`)?.remove();
+
+  const btn = document.createElement('button');
+
+  btn.textContent = '✒️';
+  btn.className = 'add-style-btn'; // Assign a class for potential external styling
+  btn.setAttribute('data-tooltip', 'Add your own writing style'); // Tooltip
+  btn.style.cssText = `
+       padding: 5px; /* Equal padding on all sides for a squarish look */
+        font-size: 16px; /* Adjust font size to make the pen icon visible within the small button */
+
+        cursor: pointer;
+        border: 1px solid #ccc;
+        border-radius: 6px; /* Keep consistent border-radius */
+        background: white;
+        color: #333;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: background 0.2s ease;
+        white-space: nowrap; /* Ensure no wrapping, though less critical for single icon */
+
+        /* Positioning/Sizing for a small button */
+        width: 32px; /* Explicit width for squarish shape, adjust as needed */
+        height: 32px; /* Explicit height for squarish shape, adjust as needed */
+        display: inline-flex; /* Use flex to center the icon */
+        align-items: center; /* Vertically center the icon */
+        justify-content: center; /* Horizontally center the icon */
+        box-sizing: border-box; /* Include padding/border in width/height */
+
+        /* Margin adjustment (may need fine-tuning based on final position) */
+        margin-left: 5px; /* Small margin to separate from AI Write button */
+    `;
+  // Add hover effects for better UX
+  btn.onmouseover = () => (btn.style.background = '#e0e0e0');
+  btn.onmouseout = () => (btn.style.background = 'white');
+
+  btn.addEventListener('click', () => {
+    // Prevent multiple style box overlays
+    if (document.getElementById('style-input-overlay')) {
+      console.warn('Style input overlay already open. Preventing duplicate.');
+      return;
+    }
+
+    // --- Create Overlay Container ---
+    const overlay = document.createElement('div');
+    overlay.id = 'style-input-overlay';
+    overlay.style.cssText = `
+            position: fixed; /* Fixed position to cover the entire viewport */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* Semi-transparent black background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000; /* High z-index to ensure it's on top */
+        `;
+
+    // --- Create Style Box (the actual modal content) ---
+    const styleBox = document.createElement('div');
+    styleBox.className = 'style-input-box';
+    styleBox.style.cssText = `
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            width: 90%; /* Responsive width */
+            max-width: 500px; /* Max width for readability */
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            position: relative;
+        `;
+
+    const title = document.createElement('h3');
+    title.textContent = 'Paste Your Writing Style';
+    title.style.margin = '0 0 10px 0';
+    title.style.color = '#333';
+    title.style.textAlign = 'center';
+
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = 'Paste your writing style here (max 100 words)...';
+    textarea.style.cssText = `
+            width: 100%;
+            height: 120px; /* Slightly taller textarea */
+            font-size: 14px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: vertical; /* Allow vertical resizing */
+            box-sizing: border-box; /* Include padding in element's total width/height */
+            outline: none;
+        `;
+
+    const wordCountDisplay = document.createElement('div');
+    wordCountDisplay.style.cssText = `
+            font-size: 11px;
+            color: #777;
+            text-align: right;
+            margin-top: -5px; /* Adjust spacing */
+        `;
+    let currentWordCount = 0;
+    const maxWords = 100;
+
+    // Word limit logic
+    textarea.addEventListener('input', () => {
+      const text = textarea.value.trim();
+      const words = text.split(/\s+/).filter((word) => word.length > 0);
+      currentWordCount = words.length;
+
+      if (currentWordCount > maxWords) {
+        // Trim the text to 100 words
+        textarea.value =
+          words.slice(0, maxWords).join(' ') + (text.endsWith(' ') ? ' ' : '');
+        currentWordCount = maxWords; // Update count after trimming
+        wordCountDisplay.style.color = 'red'; // Indicate limit reached
+      } else {
+        wordCountDisplay.style.color = '#777'; // Reset color
+      }
+      wordCountDisplay.textContent = `${currentWordCount}/${maxWords} words`;
+    });
+
+    // Initialize word count display
+    textarea.dispatchEvent(new Event('input'));
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = `
+            display: flex;
+            justify-content: flex-end; /* Align buttons to the right */
+            gap: 10px; /* Space between buttons */
+            margin-top: 15px; /* Space above buttons */
+        `;
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save Style';
+    saveBtn.style.cssText = `
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s ease;
+        `;
+    saveBtn.onmouseover = () => (saveBtn.style.background = '#0056b3');
+    saveBtn.onmouseout = () => (saveBtn.style.background = '#007bff');
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.style.cssText = `
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s ease;
+        `;
+    closeBtn.onmouseover = () => (closeBtn.style.background = '#f0f0f0');
+    closeBtn.onmouseout = () => (closeBtn.style.background = 'white');
+
+    // Event listeners for the overlay buttons
+    closeBtn.addEventListener('click', () => {
+      if (overlay.parentNode) {
+        overlay.remove(); // Removes the entire overlay
+      }
+    });
+
+    // saveBtn.addEventListener('click', () => {
+    //   const text = textarea.value.trim();
+    //   if (text === '') {
+    //     // Use === '' to specifically check if empty after trim
+    //     alert('Please enter some text!');
+    //     return;
+    //   }
+    //   // Ensure the final text respects the word limit
+    //   const words = text.split(/\s+/).filter((word) => word.length > 0);
+    //   const finalTextStyle = words.slice(0, maxWords).join(' ');
+
+    //   console.log('User style saved:', finalTextStyle);
+    //   // Here you would typically save `finalTextStyle` to chrome.storage.local
+    //   // or pass it to another part of your extension.
+
+    //   if (overlay.parentNode) {
+    //     overlay.remove(); // Removes the entire overlay
+    //   }
+    // });
+
+    // --- MODIFIED saveBtn.addEventListener for API Call ---
+    saveBtn.addEventListener('click', async () => {
+      // Made async to use await
+      const text = textarea.value.trim();
+      if (text === '') {
+        alert('Please enter some text!');
+        return;
+      }
+      const words = text.split(/\s+/).filter((word) => word.length > 0);
+      const finalTextStyle = words.slice(0, maxWords).join(' ');
+
+      console.log('Attempting to save user style:', finalTextStyle);
+
+      // TODO: Get the actual sessionKey dynamically.
+      const result = await chrome.storage.local.get('sessionKey');
+      const sessionKey = result.sessionKey;
+
+      if (!sessionKey) {
+        await showLoginModal();
+        return;
+      }
+
+      const endpoint = '/api/email/style';
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: sessionKey, // Add the Authorization header
+      };
+
+      try {
+        const response = await fetch(`http://localhost:8080${endpoint}`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            emailContent: null, // As per your controller's expected body
+            tone: null,
+            length: null,
+            userInput: finalTextStyle, // Send the content from the textarea
+          }),
+        });
+
+        if (response.ok) {
+          const result = await response.text(); // Or .json() if your body is JSON
+          console.log('Style saved successfully:', result);
+          alert('Style saved successfully!'); // Provide user feedback
+          if (overlay.parentNode) {
+            overlay.remove();
+          }
+        } else {
+          const errorText = await response.json();
+          throw new Error(errorText.error);
+        }
+      } catch (error) {
+        if (error.message == 'Please login') {
+          showLoginModal();
+          return;
+        } else {
+          alert(`Error saving style: ${error.message}`);
+        }
+      }
+    });
+    // --- END MODIFIED saveBtn.addEventListener ---
+
+    // Assemble the style box
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(closeBtn);
+    styleBox.appendChild(title);
+    styleBox.appendChild(textarea);
+    styleBox.appendChild(wordCountDisplay); // Add word count display below textarea
+    styleBox.appendChild(btnRow);
+
+    // Append style box to the overlay
+    overlay.appendChild(styleBox);
+
+    // Inject the overlay into the document body
+    document.body.appendChild(overlay);
+    textarea.focus(); // Focus on the textarea when the overlay appears
+  });
+
+  console.log('Style button created (not yet injected):', btn);
+  return btn; // Return the created button
+}
+
 const injectButton = async (val) => {
   // again if not stored
   const toolbar = findComposeToolbar();
@@ -833,6 +1076,7 @@ const injectButton = async (val) => {
   if (subjectButton) {
     subjectButton.style.marginRight = '5px';
   }
+
   const composeBox = document.querySelector(
     '[role="textbox"][g_editable="true"]'
   );
@@ -856,10 +1100,10 @@ const injectButton = async (val) => {
       composeBox
     );
   });
-
+  const btst = createStyleButton();
   const container = document.createElement('div');
   container.className = 'ai-toolbar-container';
-  container.append(aiButton, toneDropdown, lengthDropdown);
+  container.append(aiButton, btst, toneDropdown, lengthDropdown);
   if (subjectButton) container.appendChild(subjectButton);
 
   toolbar.insertBefore(container, toolbar.firstChild);
@@ -873,8 +1117,6 @@ const injectButton = async (val) => {
     });
     composeBox.dispatchEvent(event);
   }
-  const { sessionKey } = await chrome.storage.local.get('sessionKey');
-  if (!sessionKey) return showLoginModal();
 };
 
 const handleButtonClick = async (

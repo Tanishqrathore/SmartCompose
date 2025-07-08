@@ -27,6 +27,9 @@ public class User {
     @Column(unique = true)
     private String sessionKey;
 
+    @Column
+    private String userStyle;
+
     public User(String googleId, String email,String sessionKey) {
         this.googleId=googleId;
         this.email=email;

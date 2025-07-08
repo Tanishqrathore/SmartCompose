@@ -1,6 +1,5 @@
 package com.email.writer.Service;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -10,14 +9,14 @@ import java.time.Duration;
 
 @Service
 @Data
-public class SessionService {
+public class RedisService {
 
     private static final Duration SESSION_TTL = Duration.ofHours(2); // expire session in 2 hours
 
     private final StringRedisTemplate redisTemplate;
 
     @Autowired
-    public SessionService(StringRedisTemplate redisTemplate) {
+    public RedisService(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
 
@@ -31,5 +30,13 @@ public class SessionService {
 
     public Boolean deleteKey(String key) {
         return redisTemplate.delete(key);
+    }
+
+    public void saveStyle(String email,String style){
+        redisTemplate.opsForValue().set(email,style);
+    }
+
+    public String getStyle(String email){
+        return redisTemplate.opsForValue().get(email);
     }
 }

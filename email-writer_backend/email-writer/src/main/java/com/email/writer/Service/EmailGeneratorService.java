@@ -27,7 +27,7 @@ public class EmailGeneratorService {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
-    private final SessionService sessionService;
+    private final RedisService redisService;
 
 
     @Value("${gemini.api.url}")
@@ -39,10 +39,10 @@ public class EmailGeneratorService {
     @Value("${limit}")
     private Integer promptLimit;
 
-    public EmailGeneratorService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper,SessionService sessionService) {
+    public EmailGeneratorService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper, RedisService redisService) {
         this.webClient = webClientBuilder.build();
         this.objectMapper = objectMapper;
-        this.sessionService=sessionService;
+        this.redisService = redisService;
     }
 
 
@@ -88,7 +88,7 @@ public class EmailGeneratorService {
     }
 
     public String generateSubject(String passcode,EmailRequest emailRequest) {
-        String userEmail = sessionService.getEmail(passcode);
+        String userEmail = redisService.getEmail(passcode);
         if(userEmail==null){throw new SessionInvalidException("Please login");}
 
 
@@ -98,7 +98,8 @@ public class EmailGeneratorService {
         }
 
 
-        String prompt = buildPrompt(emailRequest, 2);
+
+        String prompt = buildPrompt(emailRequest, 2,"follow professional tone");
         return sendPromptToGemini(prompt);
     }
 
@@ -132,14 +133,17 @@ public class EmailGeneratorService {
     }
 
     public Flux<String> generateEmail(String passcode,EmailRequest emailRequest) {
-        String userEmail = sessionService.getEmail(passcode);
+        String userEmail = redisService.getEmail(passcode);
         if(userEmail==null){throw new SessionInvalidException("Please login");}
 
         if (!rateLimiter.isAllowed(userEmail, 15, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
 
-        String prompt = buildPrompt(emailRequest, 1);
+        String style = redisService.getStyle(userEmail);
+        if(style==null){style="Follow a professional style";}
+
+        String prompt = buildPrompt(emailRequest, 1,style);
         if (prompt.length() > promptLimit) {
             throw new PromptTooLargeException("Prompt exceeds Gemini's maximum allowed size.");
         }
@@ -147,7 +151,7 @@ public class EmailGeneratorService {
     }
 
     public Flux<String> generateEmailReply(String passcode,EmailRequest emailRequest) {
-        String userEmail = sessionService.getEmail(passcode);
+        String userEmail = redisService.getEmail(passcode);
 
 
 
@@ -157,7 +161,10 @@ public class EmailGeneratorService {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
 
-        String prompt = buildPrompt(emailRequest, 0);
+        String style = redisService.getStyle(userEmail);
+        if(style==null){style="Follow a professional style";}
+
+        String prompt = buildPrompt(emailRequest, 0,style);
         if (prompt.length() > promptLimit) {
             throw new PromptTooLargeException("Prompt exceeds Gemini's maximum allowed size.");
         }
@@ -177,7 +184,7 @@ public class EmailGeneratorService {
     public Flux<String> generateContent(String passcode,EmailRequest emailRequest) {
 
         //session confirmation;
-        String userEmail = sessionService.getEmail(passcode);
+        String userEmail = redisService.getEmail(passcode);
         if(userEmail==null){throw new SessionInvalidException("Please login");}
 
 
@@ -185,6 +192,9 @@ public class EmailGeneratorService {
         if (!rateLimiter.isAllowed(userEmail, 15, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
+
+        String style = redisService.getStyle(userEmail);
+        if(style==null){style="Follow a professional style";}
 
         StringBuilder prompt = new StringBuilder();
 
@@ -197,7 +207,8 @@ public class EmailGeneratorService {
         prompt.append("Example 1:\n");
         prompt.append("Original Text: \"The quick brown fox jumps over the lazy dog.\" (9 words)\n");
         prompt.append("Rewrite: A swift, russet fox leaps above the sluggish canine.\n\n");
-
+        prompt.append("Follow this writing style:");
+        prompt.append(style);
         prompt.append("Your primary task is to rewrite the following original text into a single, continuous block. No paragraph breaks, no extra newlines within the text.");
         prompt.append("It is **absolutely critical** that the rewritten text maintains the *exact same word count* as the original. Just rephrase the existing content,based on user demand");
         prompt.append("User demand:");
@@ -216,8 +227,12 @@ public class EmailGeneratorService {
         return streamPromptToGemini(prompt.toString());
     }
 
-    private String buildPrompt(EmailRequest emailRequest, int flag) {
+    private String buildPrompt(EmailRequest emailRequest, int flag,String style) {
         StringBuilder prompt = new StringBuilder();
+
+        prompt.append("Study this writing style:");
+        prompt.append(style);
+        prompt.append("I want any content you return, written in this style only.");
 
         if (flag == 2) {
             prompt.append("Generate a concise and appropriate subject line for the following email content. Respond with only the subject line, nothing else:\n")
