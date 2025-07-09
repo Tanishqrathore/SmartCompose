@@ -136,7 +136,7 @@ public class EmailGeneratorService {
         String userEmail = redisService.getEmail(passcode);
         if(userEmail==null){throw new SessionInvalidException("Please login");}
 
-        if (!rateLimiter.isAllowed(userEmail, 15, 200)) {
+        if (!rateLimiter.isAllowed(userEmail, 3, 200)) {
             throw new GeminiQuotaExceededException("User quota exceeded.Please try again later.");
         }
 
@@ -152,7 +152,7 @@ public class EmailGeneratorService {
 
     public Flux<String> generateEmailReply(String passcode,EmailRequest emailRequest) {
         String userEmail = redisService.getEmail(passcode);
-
+        if(userEmail==null){throw new SessionInvalidException("Please login");}
 
 
 

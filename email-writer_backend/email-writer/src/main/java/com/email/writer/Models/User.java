@@ -27,7 +27,8 @@ public class User {
     @Column(unique = true)
     private String sessionKey;
 
-    @Column
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String userStyle;
 
     public User(String googleId, String email,String sessionKey) {

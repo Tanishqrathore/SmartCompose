@@ -1,6 +1,6 @@
 console.log('Email_Write');
 
-const limit = 10000;
+const limit = 10;
 let savedRange = null;
 
 async function showLoginModal() {
